@@ -180,4 +180,81 @@ go=function(p){v4PrevGo(p);if(p==='Practice')el.insertAdjacentHTML('afterbegin',
 if(p==='Learn')el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🗺️ Guided learning roadmap</h2><p>See the course modules and choose your next skill.</p><button onclick="v4Course()">View roadmap →</button></div>`);
 if(p==='Profile')el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🏅 Version 4 achievements</h2><p>${v4.completed.filter(x=>typeof x==='number').length}/${v4Challenges.length} challenges · ${v4.badges.join(', ')||'No badges yet'}</p><button onclick="v4Hub()">Keep practising →</button></div>`);
 };
+
+/* V5: expanded hands-on training, portable progress and workplace task board. */
+const v5Key='sna-v5';
+let v5;try{v5=JSON.parse(localStorage.getItem(v5Key)||'{}')}catch(e){v5={}}
+v5.tasks=Array.isArray(v5.tasks)?v5.tasks:[];
+v5.achievements=Array.isArray(v5.achievements)?v5.achievements:[];
+v5.activity=Array.isArray(v5.activity)?v5.activity:[];
+function v5save(){localStorage.setItem(v5Key,JSON.stringify(v5))}
+function v5escape(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function v5Earn(id,amount,label){
+ if(v5.achievements.includes(id))return false;
+ v5.achievements.push(id);v5.activity.unshift({at:new Date().toISOString(),label:label,xp:amount});
+ v5.activity=v5.activity.slice(0,40);state.xp+=amount;save();v5save();return true;
+}
+const v5Labs=[
+ {id:'user',name:'User onboarding',icon:'👤',scenario:'A new employee joins the organisation. Set up a basic training user.',fields:[['name','Full name','text'],['email','Work email','email'],['department','Department','select','IT,Finance,Operations,Carbon Projects']],verify:d=>d.name.trim().split(/\s+/).length>=2&&/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email),tip:'Use a full name and valid email address.'},
+ {id:'group',name:'Assignment groups',icon:'👥',scenario:'Create a support team to receive carbon project requests.',fields:[['name','Group name','text'],['manager','Group manager','text'],['purpose','Purpose','text']],verify:d=>d.name.trim().length>=5&&d.manager.trim().length>=3&&d.purpose.trim().length>=12,tip:'Give the group a meaningful name, manager and clear purpose.'},
+ {id:'request',name:'Service Catalog',icon:'🛒',scenario:'A field officer requests a laptop for mapping and GIS work.',fields:[['item','Requested item','select','Laptop,GIS software,Mobile phone'],['requested_for','Requested for','text'],['justification','Business justification','text']],verify:d=>d.requested_for.trim().length>=3&&d.justification.trim().length>=20,tip:'Explain why the item is needed for work.'},
+ {id:'change',name:'Change management',icon:'🔧',scenario:'Schedule a change to update a project tracking workflow.',fields:[['summary','Change summary','text'],['risk','Risk','select','Low,Medium,High'],['backout','Backout plan','textarea']],verify:d=>d.summary.trim().length>=12&&d.backout.trim().length>=20,tip:'Include a clear summary and a usable backout plan.'},
+ {id:'acl',name:'ACL security',icon:'🔒',scenario:'Protect confidential landowner records with a role-based read ACL.',fields:[['table','Table','select','Landowners,Land Parcels,Projects'],['operation','Operation','select','Read,Write,Create,Delete'],['role','Required role','text']],verify:d=>d.table==='Landowners'&&d.operation==='Read'&&d.role.trim().length>=5,tip:'Select Landowners, Read, and a specific role (for example carbon_landowner_reader).'},
+ {id:'carbon',name:'REDD+ project record',icon:'🌳',scenario:'Register a new carbon project for approval tracking.',fields:[['project','Project name','text'],['country','Country','select','Australia,Papua New Guinea'],['area','Area (hectares)','number'],['stage','Project stage','select','Screening,Due diligence,Under Review,Approved']],verify:d=>d.project.trim().length>=5&&Number(d.area)>0,tip:'Provide a project name and area greater than zero.'}
+];
+function v5Home(){
+ page='Practice';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="go('Practice')">← Practice</button></p>
+ <div class="card hero"><span class="pill">VERSION 5</span><h2>🏢 Workplace Training Centre</h2><p>Practise six administrator tasks. Each is a safe browser-only simulation.</p><p>⭐ ${state.xp} XP · ${v5.achievements.length}/${v5Labs.length} lab achievements</p></div>
+ <div class="v4-grid">${v5Labs.map((l,i)=>`<button onclick="v5Lab(${i})">${l.icon}<br>${l.name}${v5.achievements.includes(l.id)?' ✅':''}</button>`).join('')}</div>
+ <div class="card"><h2>📋 My task board</h2><button onclick="v5Board()">View saved training records →</button></div>
+ <div class="card"><h2>💾 Keep your progress safe</h2><p>Export your learning data to a JSON backup. You can import it in another browser.</p><button onclick="v5Export()">Export progress</button><label>Import backup <input type="file" accept=".json,application/json" onchange="v5Import(event)"></label></div>`;
+}
+function v5Lab(i){
+ const l=v5Labs[i];page='Practice';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="v5Home()">← Training Centre</button></p>
+ <div class="card"><p class="pill">TRAINING LAB ${i+1}/${v5Labs.length}</p><h2>${l.icon} ${l.name}</h2><p>${l.scenario}</p>
+ <form id="v5form">${l.fields.map(([key,label,type,options])=>`<label>${label}${type==='select'?`<select name="${key}" required><option value="">Choose...</option>${options.split(',').map(x=>`<option>${x}</option>`).join('')}</select>`:type==='textarea'?`<textarea name="${key}" required style="width:100%;min-height:100px"></textarea>`:`<input name="${key}" type="${type}" required>`}</label>`).join('')}
+ <button type="submit">Validate and save training record →</button></form><p id="v5result" role="status"></p></div>`;
+ document.getElementById('v5form').onsubmit=e=>{
+  e.preventDefault();let d=Object.fromEntries(new FormData(e.target).entries());
+  if(!l.verify(d)){document.getElementById('v5result').textContent='⚠️ '+l.tip;return}
+  let id=l.id.toUpperCase()+'-'+String(v5.tasks.length+1).padStart(4,'0');
+  v5.tasks.push({id,type:l.name,data:d,at:new Date().toISOString()});v5save();
+  let earned=v5Earn(l.id,40,'Completed '+l.name);
+  document.getElementById('v5result').innerHTML=`<strong>✅ ${id} saved locally!</strong><p>${earned?'+40 XP earned!':'Lab already rewarded; extra record saved.'}</p><button onclick="v5Board()">View task board →</button>`;
+  e.target.querySelector('button[type=submit]').disabled=true;
+ };
+}
+function v5Board(){
+ page='Practice';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="v5Home()">← Training Centre</button></p><div class="card"><h2>📋 Workplace task board</h2><p>${v5.tasks.length} saved practice records. Nothing here is sent to ServiceNow.</p>
+ ${v5.tasks.length?`<div style="overflow-x:auto"><table class="v4-table"><thead><tr><th>Record</th><th>Type</th><th>Created</th></tr></thead><tbody>${v5.tasks.slice().reverse().map(t=>`<tr><td>${v5escape(t.id)}</td><td>${v5escape(t.type)}</td><td>${new Date(t.at).toLocaleDateString()}</td></tr>`).join('')}</tbody></table></div>`:'<p>No records yet. Complete a lab to create one.</p>'}
+ <button onclick="v5Home()">Create another record →</button></div>`;
+}
+function v5Export(){
+ const data={format:'sna-backup-v5',version:1,exportedAt:new Date().toISOString(),state,v4,v5};
+ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='servicenow-academy-progress.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+async function v5Import(e){
+ const file=e.target.files?.[0];if(!file)return;
+ try{
+  if(file.size>2e6)throw Error('Backup is too large');
+  const d=JSON.parse(await file.text());
+  if(d.format!=='sna-backup-v5'||!d.state||!d.v4||!d.v5||!Array.isArray(d.state.done)||!Array.isArray(d.v5.tasks)||!Array.isArray(d.v4.completed))throw Error('Not a valid Academy V5 backup');
+  if(!confirm('Replace progress in this browser with the imported backup?'))return;
+  localStorage.setItem('sna-v1',JSON.stringify(d.state));
+  localStorage.setItem('sna-v4',JSON.stringify(d.v4));
+  localStorage.setItem('sna-v5',JSON.stringify(d.v5));
+  alert('Backup imported. Reloading your Academy.');location.reload();
+ }catch(err){alert('Import failed: '+err.message)}
+}
+const v5Go=go;
+go=function(p){
+ v5Go(p);
+ if(p==='Practice')el.insertAdjacentHTML('afterbegin',`<div class="card hero"><span class="pill">NEW • V5</span><h2>🏢 Workplace Training Centre</h2><p>Six interactive labs, saved training records and progress backup.</p><button onclick="v5Home()">Open Training Centre →</button></div>`);
+ if(p==='Home')el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🚀 Version 5 is here</h2><p>Build administrator skills with hands-on practice and portable progress backups.</p><button onclick="v5Home()">Try the new labs →</button></div>`);
+};
+
 </script></body></html>
