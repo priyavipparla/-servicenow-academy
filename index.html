@@ -233,7 +233,7 @@ function v5Board(){
  <button onclick="v5Home()">Create another record →</button></div>`;
 }
 function v5Export(){
- const data={format:'sna-backup-v5',version:1,exportedAt:new Date().toISOString(),state,v4,v5};
+ const data={format:'sna-backup-v5',version:2,exportedAt:new Date().toISOString(),state,v4,v5,v6,v7};
  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='servicenow-academy-progress.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
@@ -247,6 +247,8 @@ async function v5Import(e){
   localStorage.setItem('sna-v1',JSON.stringify(d.state));
   localStorage.setItem('sna-v4',JSON.stringify(d.v4));
   localStorage.setItem('sna-v5',JSON.stringify(d.v5));
+  if(d.v6&&Array.isArray(d.v6.done)&&Array.isArray(d.v6.tickets))localStorage.setItem('sna-v6',JSON.stringify(d.v6));
+  if(d.v7&&Array.isArray(d.v7.flash)&&Array.isArray(d.v7.tests))localStorage.setItem('sna-v7',JSON.stringify(d.v7));
   alert('Backup imported. Reloading your Academy.');location.reload();
  }catch(err){alert('Import failed: '+err.message)}
 }
@@ -255,6 +257,193 @@ go=function(p){
  v5Go(p);
  if(p==='Practice')el.insertAdjacentHTML('afterbegin',`<div class="card hero"><span class="pill">NEW • V5</span><h2>🏢 Workplace Training Centre</h2><p>Six interactive labs, saved training records and progress backup.</p><button onclick="v5Home()">Open Training Centre →</button></div>`);
  if(p==='Home')el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🚀 Version 5 is here</h2><p>Build administrator skills with hands-on practice and portable progress backups.</p><button onclick="v5Home()">Try the new labs →</button></div>`);
+};
+
+
+/* V6 learning expansion: additional lessons, live training ticket desk, analytics. */
+const v6Key='sna-v6';
+let v6;try{v6=JSON.parse(localStorage.getItem(v6Key)||'{}')}catch(e){v6={}}
+v6.done=Array.isArray(v6.done)?v6.done:[];
+v6.tickets=Array.isArray(v6.tickets)?v6.tickets:[];
+function v6save(){localStorage.setItem(v6Key,JSON.stringify(v6))}
+const v6Topics=[
+['Incident lifecycle','An incident restores an interrupted service. Capture a clear summary, impact, urgency, assignment group and work notes.','An employee cannot access VPN. What should you do first?',['Create and classify an incident','Delete the VPN service','Close all incidents'],0,'An incident documents the interruption so the team can investigate.'],
+['Impact and urgency','Impact is how many people or services are affected. Urgency is how quickly action is needed. Both help calculate priority.','A payroll system is unavailable to the entire company. Which impact fits best?',['Low','High','None'],1,'A company-wide outage has high impact.'],
+['Problem versus incident','Incidents restore service; problems investigate the underlying cause of repeated incidents.','A recurring outage has no known root cause. Which record investigates it?',['Catalog request','Problem','User record'],1,'Problem Management focuses on root cause.'],
+['Normal change approvals','Normal changes are assessed for risk, tested and approved under the organisation’s change policy.','Which plan helps restore service if a change fails?',['Backout plan','Colour theme','List filter'],0,'A backout plan describes how to reverse the change.'],
+['SLA fundamentals','An SLA measures a service commitment, such as response or resolution time. Pauses and schedules can affect calculations.','What does an SLA track?',['Response or resolution targets','Number of themes','How many apps are installed'],0,'SLAs measure agreed service targets.'],
+['CMDB and relationships','A CMDB stores configuration items (CIs) and their relationships, such as an application running on a server.','Which record represents a managed server?',['Configuration item','Service request','Notification'],0,'Servers are common CIs.'],
+['Roles and ACLs','Roles describe permissions. ACL rules enforce record- and field-level access to operations like read or write.','What should protect a confidential salary field?',['ACL','UI Policy only','Dashboard'],0,'An ACL enforces access control; hiding a field does not secure it.'],
+['UI Policies','UI Policies can make fields mandatory, visible or read-only based on conditions, without scripting.','Make a field mandatory when category is Hardware. Best first tool?',['UI Policy','Scheduled job','Transform Map'],0,'A UI Policy handles conditional form behaviour.'],
+['Client Scripts','Client scripts run in the browser: onLoad, onChange, onSubmit and onCellEdit.','A field change should immediately show a message. Which script type?',['onChange','After business rule','Import set'],0,'onChange client scripts react to a field value changing.'],
+['Business Rules','Business rules execute server-side on database operations. Use before, after, async or display appropriately.','Set a field before a record is inserted. Which rule timing?',['Before','After only','OnLoad'],0,'Before rules can update fields prior to saving.'],
+['Flow Designer','Flows combine triggers, conditions and actions to automate work without relying on manual steps.','When project status changes to Review, create approval. Best approach?',['Flow Designer','Theme switch','List personalisation'],0,'A record trigger can start an approval flow.'],
+['Notifications','Notifications can send messages based on record events or conditions. Define recipients and message content.','A ticket is assigned to a team. What can alert them?',['Notification','CMDB class','Form layout'],0,'Notifications communicate record updates.'],
+['Import Sets','Import sets stage incoming data. Transform maps map source fields to target table fields.','Which component maps incoming columns to target fields?',['Transform Map','ACL','SLA'],0,'Transform maps specify how imported values populate target records.'],
+['Reference fields','Reference fields store links to records in another table, helping avoid duplicate data.','A land parcel belongs to a landowner. Which field type?',['Reference','True/false','Date only'],0,'A reference connects the parcel to a landowner record.'],
+['Reports and dashboards','Reports summarise records using filters and visualisations. Dashboards arrange reports for a shared view.','Where should a manager view multiple KPI charts together?',['Dashboard','ACL','Import Set'],0,'Dashboards combine multiple reports and widgets.'],
+['Scoped applications','Application scopes isolate app components and help control cross-scope access.','Why use a scope for a carbon project app?',['Organise and protect app components','Automatically approve carbon credits','Replace all security'],0,'Scope boundaries help structure custom apps.'],
+['REDD+ project approvals','A project record can track landowner checks, spatial documents, due diligence and review approvals. Regulatory requirements must be verified separately.','Which step should precede marking a project approved?',['Review required evidence and approvals','Skip checks','Delete landowner records'],0,'Approval should follow documented checks.'],
+['CSA study strategy','Practise core navigation, tables, access, automation and data concepts. Use current official exam objectives for final preparation.','What is the safest way to prepare for the real CSA exam?',['Use current official objectives and hands-on practice','Memorise only these app questions','Skip platform practice'],0,'These are original practice questions, not official exam items.']
+];
+let v6Index=0,v6Pick=null;
+function v6Course(){
+ page='Learn';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="go('Learn')">← Learning path</button></p><div class="card hero"><span class="pill">VERSION 6</span><h2>📚 Administrator Skills Studio</h2><p>18 new bite-sized lessons with explanations and quick checks.</p><p>${v6.done.length}/${v6Topics.length} new lessons completed</p><div class="v4-meter"><span style="width:${100*v6.done.length/v6Topics.length}%"></span></div></div>
+ ${v6Topics.map((t,i)=>`<div class="card row"><div style="flex:1"><strong>${v6.done.includes(i)?'✅':'⭕'} ${i+1}. ${t[0]}</strong><p class="small">${t[1].slice(0,85)}...</p></div><button onclick="v6Lesson(${i})">Open</button></div>`).join('')}`;
+}
+function v6Lesson(i){
+ v6Index=i;v6Pick=null;page='Learn';nav();
+ const t=v6Topics[i];
+ el.innerHTML=`<p><button class="secondary" onclick="v6Course()">← Skills Studio</button></p><p class="small">LESSON ${i+1} / ${v6Topics.length}</p><div class="card"><h2>${t[0]}</h2><p>${t[1]}</p></div>
+ <div class="card"><h2>🧠 Check your understanding</h2><p>${t[2]}</p>${t[3].map((a,j)=>`<button class="option" onclick="v6Select(${j})">${String.fromCharCode(65+j)}. ${a}</button>`).join('')}
+ <p id="v6feedback" role="status"></p><button id="v6check" disabled onclick="v6Check()">Check answer →</button></div>`;
+}
+function v6Select(j){v6Pick=j;document.querySelectorAll('.option').forEach((b,i)=>b.classList.toggle('selected',i===j));document.getElementById('v6check').disabled=false}
+function v6Check(){
+ const t=v6Topics[v6Index],ok=v6Pick===t[4],f=document.getElementById('v6feedback');
+ if(!ok){f.textContent='❌ Try again. Re-read the explanation and choose another answer.';return}
+ let earned=!v6.done.includes(v6Index);
+ if(earned){v6.done.push(v6Index);v6save();state.xp+=20;save()}
+ f.innerHTML=`<strong>✅ Correct! ${earned?'+20 XP earned!':'Already completed.'}</strong><p>${t[5]}</p><button onclick="${v6Index+1<v6Topics.length?'v6Lesson('+(v6Index+1)+')':'v6Course()'}">Continue →</button>`;
+ document.getElementById('v6check').disabled=true;document.querySelectorAll('.option').forEach(b=>b.disabled=true);
+}
+function v6Desk(){
+ page='Practice';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="go('Practice')">← Practice</button></p><div class="card hero"><span class="pill">VERSION 6</span><h2>🖥️ Service Desk Workspace</h2><p>Create, assign and update training incidents through a ticket lifecycle.</p></div>
+ <div class="card"><h2>➕ New incident</h2><form id="v6form"><label>Short description<input name="summary" required minlength="12" placeholder="Employee unable to connect to VPN"></label>
+ <label>Impact<select name="impact" required><option value="">Select impact</option><option value="1">1 - High</option><option value="2">2 - Medium</option><option value="3">3 - Low</option></select></label>
+ <label>Urgency<select name="urgency" required><option value="">Select urgency</option><option value="1">1 - High</option><option value="2">2 - Medium</option><option value="3">3 - Low</option></select></label>
+ <label>Assignment group<select name="group" required><option value="">Select group</option><option>Service Desk</option><option>Network Support</option><option>Desktop Support</option><option>Carbon Projects</option></select></label>
+ <button type="submit">Create incident</button></form><p id="v6message" role="status"></p></div>
+ <div class="card"><h2>📋 Incident list</h2>${v6.tickets.length?`<div style="overflow-x:auto"><table class="v4-table"><thead><tr><th>Number</th><th>Summary</th><th>Priority</th><th>State</th></tr></thead><tbody>${v6.tickets.slice().reverse().map(t=>`<tr><td><button class="secondary" onclick="v6Ticket('${t.id}')">${t.id}</button></td><td>${v5escape(t.summary)}</td><td>P${t.priority}</td><td>${v5escape(t.status)}</td></tr>`).join('')}</tbody></table></div>`:'<p>No incidents created yet.</p>'}</div>`;
+ document.getElementById('v6form').onsubmit=e=>{
+  e.preventDefault();const d=Object.fromEntries(new FormData(e.target));
+  const priority=Math.min(5,Math.max(1,Math.ceil((Number(d.impact)+Number(d.urgency))/2)));
+  const id='INC'+String(100001+v6.tickets.length).padStart(7,'0');
+  v6.tickets.push({...d,id,priority,status:'New',notes:[],created:new Date().toISOString()});
+  v6save();state.xp+=10;save();v6Ticket(id);
+ };
+}
+function v6Ticket(id){
+ const t=v6.tickets.find(x=>x.id===id);if(!t)return v6Desk();
+ page='Practice';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="v6Desk()">← Incident list</button></p><div class="card"><span class="pill">TRAINING RECORD</span><h2>${v5escape(t.id)}</h2>
+ <p><strong>${v5escape(t.summary)}</strong></p><p>Impact ${t.impact} · Urgency ${t.urgency} · Priority P${t.priority}</p><p>Assigned to: ${v5escape(t.group)}</p>
+ <label>State<select id="v6status">${['New','In Progress','On Hold','Resolved','Closed'].map(x=>`<option ${x===t.status?'selected':''}>${x}</option>`).join('')}</select></label>
+ <label>Work notes<textarea id="v6note" placeholder="Document what you investigated..." style="width:100%;min-height:100px"></textarea></label>
+ <button onclick="v6Update('${t.id}')">Save update</button><p id="v6msg" role="status"></p>
+ <h3>Activity history</h3>${t.notes.length?t.notes.slice().reverse().map(n=>`<p class="small">${v5escape(n.when)} — ${v5escape(n.text)}</p>`).join(''):'<p>No work notes yet.</p>'}</div>`;
+}
+function v6Update(id){
+ const t=v6.tickets.find(x=>x.id===id),status=document.getElementById('v6status').value,note=document.getElementById('v6note').value.trim();
+ if(!note&&status===t.status){document.getElementById('v6msg').textContent='Add a work note or change the state first.';return}
+ if(status==='Closed'&&t.status!=='Resolved'){document.getElementById('v6msg').textContent='Resolve the incident before closing it.';return}
+ if(note)t.notes.push({when:new Date().toLocaleString(),text:note});
+ if(status!==t.status)t.notes.push({when:new Date().toLocaleString(),text:'State changed: '+t.status+' → '+status});
+ t.status=status;v6save();v6Ticket(id);
+}
+function v6Dashboard(){
+ page='Profile';nav();
+ const oldDone=state.done.filter(k=>/^\d+-\d+$/.test(k)).length;
+ const stats=[['Starter lessons',oldDone,total],['New administrator lessons',v6.done.length,v6Topics.length],['Workplace labs',v5.achievements.length,v5Labs.length],['Arcade challenges',v4.completed.filter(n=>typeof n==='number').length,v4Challenges.length]];
+ el.innerHTML=`<p><button class="secondary" onclick="go('Profile')">← Profile</button></p><div class="card hero"><h2>📊 Learning Dashboard</h2><p>⭐ ${state.xp} total XP · 🔥 ${state.streak} day streak</p></div>
+ ${stats.map(([name,done,max])=>`<div class="card"><strong>${name}</strong><p>${done} / ${max} completed</p><div class="v4-meter"><span style="width:${100*done/max}%"></span></div></div>`).join('')}
+ <div class="card"><h2>🖥️ Service Desk</h2><p>${v6.tickets.length} training incidents · ${v6.tickets.filter(t=>t.status==='Resolved'||t.status==='Closed').length} resolved/closed</p></div>
+ <div class="card"><h2>🎯 Suggested next step</h2><p>${v6.done.length<v6Topics.length?'Complete another Administrator Skills Studio lesson.':'Practise creating and resolving an incident.'}</p><button onclick="${v6.done.length<v6Topics.length?'v6Course()':'v6Desk()'}">Continue →</button></div>
+ <p class="small">Progress is stored in this browser, not on a cloud account. Your dashboard shows practice progress, not official certification readiness.</p>`;
+}
+const v6Go=go;
+go=function(p){
+ v6Go(p);
+ if(p==='Home')el.insertAdjacentHTML('afterbegin',`<div class="card hero"><span class="pill">NEW • V6</span><h2>🌟 Learn · Practise · Track</h2><p>18 new lessons, a ticketing workspace and a progress dashboard.</p><button onclick="v6Dashboard()">My dashboard →</button></div>`);
+ if(p==='Learn')el.insertAdjacentHTML('afterbegin',`<div class="card hero"><h2>📚 Administrator Skills Studio</h2><p>18 new short lessons with explanations, quizzes and XP.</p><button onclick="v6Course()">Open new lessons →</button></div>`);
+ if(p==='Practice')el.insertAdjacentHTML('afterbegin',`<div class="card hero"><h2>🖥️ Service Desk Workspace</h2><p>Create, assign and resolve practice incidents with work notes.</p><button onclick="v6Desk()">Open workspace →</button></div>`);
+ if(p==='Profile')el.insertAdjacentHTML('afterbegin',`<div class="card hero"><h2>📊 Learning Dashboard</h2><p>View course completion, labs, challenges and ticket progress.</p><button onclick="v6Dashboard()">View dashboard →</button></div>`);
+};
+
+/* V7: flashcards, search, personal study plan and skill assessments. Includes V6. */
+const v7Key='sna-v7';
+let v7;try{v7=JSON.parse(localStorage.getItem(v7Key)||'{}')}catch(e){v7={}}
+v7.flash=Array.isArray(v7.flash)?v7.flash:[];
+v7.plan=Array.isArray(v7.plan)?v7.plan:[];
+v7.tests=Array.isArray(v7.tests)?v7.tests:[];
+function v7save(){localStorage.setItem(v7Key,JSON.stringify(v7))}
+function v7Hub(){
+ page='Home';nav();
+ el.innerHTML=`<div class="card hero"><span class="pill">VERSION 7 • ALL-IN-ONE</span><h2>🚀 ServiceNow Academy</h2><p>Learn concepts, practise real workplace scenarios and track your progress.</p><p>⭐ ${state.xp} XP · 📚 ${v6.done.length}/${v6Topics.length} advanced lessons</p></div>
+ <div class="v4-grid"><button onclick="v6Course()">📚 V6 Skills Studio</button><button onclick="v6Desk()">🖥️ Service Desk</button><button onclick="v5Home()">🏢 Workplace Labs</button><button onclick="v6Dashboard()">📊 Dashboard</button><button onclick="v7Flash()">🗂️ Flashcards</button><button onclick="v7Search()">🔎 Find a lesson</button><button onclick="v7Plan()">📅 Study planner</button><button onclick="v7Test()">🎓 Knowledge check</button></div>
+ <div class="card"><h2>🔄 Existing features</h2><p>Your starter lessons, V4 arcade, REDD+ activities, V5 labs and V6 content are included in this single file.</p><button onclick="go('Learn')">All lessons →</button><button class="secondary" onclick="go('Practice')">All practice →</button></div>
+ <div class="card"><h2>💾 Protect your progress</h2><button onclick="v5Export()">Export progress backup</button><p class="small">Backups contain your saved practice data. Do not enter real personal or confidential information in training forms.</p></div>`;
+}
+let v7Card=0,v7Revealed=false;
+function v7Flash(i=0){
+ v7Card=(i+v6Topics.length)%v6Topics.length;v7Revealed=false;v7DrawFlash();
+}
+function v7DrawFlash(){
+ page='Learn';nav();const t=v6Topics[v7Card];
+ el.innerHTML=`<p><button class="secondary" onclick="v7Hub()">← Version 7 Hub</button></p><div class="card hero"><p class="pill">FLASHCARD ${v7Card+1}/${v6Topics.length}</p><h2>${t[0]}</h2><p>${v7Revealed?t[1]:'Think: what does this concept mean?'}</p>
+ <button onclick="v7Revealed=true;v7DrawFlash()">${v7Revealed?'Explanation shown':'Reveal explanation'}</button>
+ <button class="secondary" onclick="v7Flash(${v7Card+1})">Next card →</button></div>
+ <div class="card"><h2>Remembered this?</h2><button onclick="v7MarkFlash()">Mark as remembered ${v7.flash.includes(v7Card)?'✓':''}</button><p>${v7.flash.length}/${v6Topics.length} cards remembered</p></div>`;
+}
+function v7MarkFlash(){if(!v7.flash.includes(v7Card)){v7.flash.push(v7Card);v7save()}v7DrawFlash()}
+function v7Search(){
+ page='Learn';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="v7Hub()">← Version 7 Hub</button></p><div class="card"><h2>🔎 Search lessons</h2><label>Search a skill<input id="v7query" placeholder="ACL, incident, carbon, scripting..." oninput="v7SearchResults()"></label><div id="v7results"></div></div>`;
+ v7SearchResults();
+}
+function v7SearchResults(){
+ const q=document.getElementById('v7query').value.toLowerCase().trim();
+ const matches=v6Topics.map((t,i)=>({t,i})).filter(({t})=>(t[0]+' '+t[1]).toLowerCase().includes(q));
+ document.getElementById('v7results').innerHTML=`<p>${matches.length} lessons found</p>${matches.map(({t,i})=>`<button class="option" onclick="v6Lesson(${i})">${i+1}. ${t[0]} →</button>`).join('')||'<p>No matches. Try another keyword.</p>'}`;
+}
+const v7PlanItems=[
+['Learn','Complete one administrator lesson'],
+['Practice','Create and update one training incident'],
+['Review','Review three flashcards'],
+['Project','Complete one REDD+ or workplace lab']
+];
+function v7Plan(){
+ page='Home';nav();
+ const today=new Date().toLocaleDateString('en-CA');
+ el.innerHTML=`<p><button class="secondary" onclick="v7Hub()">← Version 7 Hub</button></p><div class="card hero"><h2>📅 Study planner</h2><p>Choose small achievable tasks. Check them off as you practise.</p><p>${v7.plan.filter(x=>x.date===today).length}/${v7PlanItems.length} tasks checked today</p></div>
+ ${v7PlanItems.map(([label,desc],i)=>`<div class="card"><h3>${v7.plan.some(x=>x.date===today&&x.id===i)?'✅':'⬜'} ${label}</h3><p>${desc}</p><button onclick="v7TogglePlan(${i})">${v7.plan.some(x=>x.date===today&&x.id===i)?'Undo':'Mark complete'}</button></div>`).join('')}
+ <p class="small">You decide when to study. The planner does not send reminders.</p>`;
+}
+function v7TogglePlan(i){
+ const today=new Date().toLocaleDateString('en-CA'),idx=v7.plan.findIndex(x=>x.date===today&&x.id===i);
+ if(idx>=0)v7.plan.splice(idx,1);else v7.plan.push({date:today,id:i});
+ v7save();v7Plan();
+}
+let v7TestItems=[],v7TestPos=0,v7TestScore=0,v7Answered=false;
+function v7Test(){
+ v7TestItems=[0,2,4,6,8,10,12,14,16,17];v7TestPos=0;v7TestScore=0;v7TestDraw();
+}
+function v7TestDraw(){
+ page='Practice';nav();
+ if(v7TestPos>=v7TestItems.length){
+  v7.tests.push({date:new Date().toISOString(),score:v7TestScore,total:v7TestItems.length});v7save();
+  let xp='';
+  if(v7TestScore>=8&&!v7.tests.slice(0,-1).some(t=>t.score>=8)){state.xp+=50;save();xp=' +50 XP for your first 80%+ score!'}
+  el.innerHTML=`<div class="card hero"><h2>🎓 Assessment complete</h2><p>You scored <strong>${v7TestScore}/${v7TestItems.length}</strong>.${xp}</p><p>${v7TestScore>=8?'Great progress!':'Review your weaker topics and try again.'}</p><button onclick="v7Test()">Try again</button><button class="secondary" onclick="v7Hub()">Back to Hub</button></div>`;return;
+ }
+ v7Answered=false;const t=v6Topics[v7TestItems[v7TestPos]];
+ el.innerHTML=`<p><button class="secondary" onclick="v7Hub()">← Version 7 Hub</button></p><div class="card"><p class="pill">KNOWLEDGE CHECK ${v7TestPos+1}/10</p><h2>${t[0]}</h2><p>${t[2]}</p>${t[3].map((a,i)=>`<button class="option" onclick="v7Answer(${i})">${String.fromCharCode(65+i)}. ${a}</button>`).join('')}<div id="v7answer" role="status"></div></div>`;
+}
+function v7Answer(i){
+ if(v7Answered)return;v7Answered=true;
+ const t=v6Topics[v7TestItems[v7TestPos]],ok=i===t[4];if(ok)v7TestScore++;
+ document.querySelectorAll('.option').forEach(b=>b.disabled=true);
+ document.getElementById('v7answer').innerHTML=`<p><strong>${ok?'✅ Correct!':'❌ Correct answer: '+v5escape(t[3][t[4]])}</strong></p><p>${t[5]}</p><button onclick="v7TestPos++;v7TestDraw()">Next →</button>`;
+}
+const v7PreviousGo=go;
+go=function(p){
+ v7PreviousGo(p);
+ if(p==='Home')el.insertAdjacentHTML('afterbegin',`<div class="card hero"><span class="pill">NEW • VERSION 7</span><h2>🌟 All-in-one Learning Hub</h2><p>Includes Version 6, plus flashcards, search, study planner and a 10-question assessment.</p><button onclick="v7Hub()">Open Version 7 Hub →</button></div>`);
+ if(p==='Learn')el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🗂️ Flashcards & Search</h2><button onclick="v7Flash()">Review flashcards</button><button class="secondary" onclick="v7Search()">Search lessons</button></div>`);
+ if(p==='Practice')el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🎓 Knowledge Check</h2><p>Test your understanding across 10 administrator topics.</p><button onclick="v7Test()">Start assessment →</button></div>`);
+ if(p==='Profile')el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🎓 Assessment history</h2><p>${v7.tests.length} attempts · best ${v7.tests.length?Math.max(...v7.tests.map(x=>x.score))+'/10':'not attempted'}</p><button onclick="v7Hub()">Version 7 Hub →</button></div>`);
 };
 
 </script></body></html>
