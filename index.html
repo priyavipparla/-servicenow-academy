@@ -26,4 +26,60 @@ function labAnswer(i){
 function nextLab(){labIndex=labIndex+1<labTasks.length?labIndex+1:1;labView()}
 const baseGo=go;
 go=function(p){baseGo(p);if(p==='Practice'){el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🧪 Guided mini-labs</h2><p>Practise access rules, requests, references and automation. Correct answers earn 15 XP.</p><button onclick="labView()">Start guided labs →</button></div>`)}};
+
+const simKey='sna-sim-v3';
+let simRecords=[];
+try{simRecords=JSON.parse(localStorage.getItem(simKey)||'[]')}catch(e){simRecords=[]}
+function esc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function simHome(){
+ page='Practice';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="go('Practice')">← Practice</button></p>
+ <div class="card hero"><span class="pill">🖥️ Admin workspace</span><h2>ServiceNow-style simulator</h2><p>Complete realistic forms, then review your saved practice records. This simulator is not connected to ServiceNow.</p></div>
+ <div class="card"><h2>🎯 Your mission</h2><p>Choose a workplace task. Each successful first-time task earns 25 XP.</p>
+ <button class="option" onclick="simForm('incident')">🎫 Create an incident →</button>
+ <button class="option" onclick="simForm('user')">👤 Add a support user →</button>
+ <button class="option" onclick="simForm('parcel')">🌳 Register a land parcel →</button>
+ <button class="option" onclick="simList()">📋 View my practice records (${simRecords.length}) →</button></div>`;
+}
+const simFields={
+incident:{title:'New incident',prefix:'INC',intro:'Scenario: An employee cannot access company email. Record the incident and route it to the Service Desk.',fields:[
+['caller','Caller','text','e.g. Alex Morgan'],['short_description','Short description','text','e.g. Cannot access company email'],['impact','Impact','select',['','1 - High','2 - Medium','3 - Low']],['urgency','Urgency','select',['','1 - High','2 - Medium','3 - Low']],['assignment_group','Assignment group','select',['','Service Desk','Network Support','Facilities']],['work_notes','Work notes','textarea','What did you investigate?']]},
+user:{title:'New user',prefix:'USR',intro:'Scenario: A new IT support colleague needs a training user record.',fields:[
+['name','Full name','text','e.g. Taylor Lee'],['email','Email','email','e.g. taylor@example.com'],['department','Department','select',['','IT','Finance','Operations']],['group','Support group','select',['','Service Desk','Network Support','Desktop Support']]]},
+parcel:{title:'New land parcel',prefix:'PAR',intro:'Scenario: Register a land parcel in your REDD+ Carbon Project Management training app.',fields:[
+['parcel_name','Parcel name','text','e.g. Green Valley Parcel 01'],['landowner','Landowner','text','e.g. Jordan Smith'],['country','Country','select',['','Australia','Papua New Guinea']],['status','Approval status','select',['','Draft','Under review','Approved']],['notes','Parcel notes','textarea','Land characteristics or KML reference']]}}
+function simForm(kind){
+ const t=simFields[kind];page='Practice';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="simHome()">← Workspace</button></p>
+ <p class="small">TRAINING INSTANCE / ${kind.toUpperCase()} / NEW</p>
+ <div class="card"><h2>🖥️ ${t.title}</h2><p>${t.intro}</p>
+ <form id="simform" onsubmit="simSubmit(event,'${kind}')">
+ ${t.fields.map(([key,label,type,opts])=>`<label>${label} <span class="small">*</span>
+ ${type==='select'?`<select name="${key}" required>${opts.map((o,i)=>`<option value="${esc(o)}">${i===0?'Select...':esc(o)}</option>`).join('')}</select>`:type==='textarea'?`<textarea name="${key}" required placeholder="${esc(opts)}" style="width:100%;min-height:85px;border-radius:12px;padding:12px;background:var(--bg);color:var(--text);border:1px solid var(--border)"></textarea>`:`<input name="${key}" type="${type}" required placeholder="${esc(opts)}">`}
+ </label>`).join('')}
+ <p id="simFeedback" role="status"></p><button type="submit">Submit record →</button></form></div>`;
+}
+function simSubmit(e,kind){
+ e.preventDefault();
+ const values=Object.fromEntries(new FormData(e.target).entries());
+ if(Object.values(values).some(v=>!String(v).trim())){document.getElementById('simFeedback').textContent='⚠️ Please complete every field.';return}
+ if(kind==='incident'&&values.short_description.trim().length<12){document.getElementById('simFeedback').textContent='⚠️ Short description must be at least 12 characters.';return}
+ const id=simFields[kind].prefix+String(simRecords.length+1).padStart(5,'0');
+ const record={id,kind,values,created:new Date().toISOString()};
+ simRecords.push(record);localStorage.setItem(simKey,JSON.stringify(simRecords));
+ const xpKey='sim-'+kind;
+ let gained=0;
+ if(!state.done.includes(xpKey)){state.done.push(xpKey);state.xp+=25;gained=25;save()}
+ const priority=kind==='incident'?`<p><strong>Priority:</strong> P${Math.min(5,Math.ceil((Number(values.impact[0])+Number(values.urgency[0]))/2)+((Number(values.impact[0])===3&&Number(values.urgency[0])===3)?1:0))} (simplified training estimate; real instances use configured priority matrices)</p>`:'';
+ el.innerHTML=`<p><button class="secondary" onclick="simHome()">← Workspace</button></p><div class="card"><h2>✅ Record submitted</h2><p><strong>${id}</strong> saved locally on this iPhone.</p>${priority}<p>${gained?'+25 XP earned!':'Practice completed again (XP already awarded for this task).'}</p><button onclick="simList()">View records →</button><button class="secondary" onclick="simForm('${kind}')">Create another →</button></div>`;
+}
+function simList(){
+ page='Practice';nav();
+ el.innerHTML=`<p><button class="secondary" onclick="simHome()">← Workspace</button></p><h2>📋 Practice records</h2>
+ <p class="small">Stored locally on this device, not in ServiceNow.</p>
+ ${simRecords.length?simRecords.slice().reverse().map(r=>`<div class="card"><strong>${esc(r.id)}</strong> · ${esc(r.kind)}<p>${esc(r.values.short_description||r.values.name||r.values.parcel_name)}</p><p class="small">${esc(new Date(r.created).toLocaleString())}</p></div>`).join(''):'<div class="card">No records yet. Create your first one!</div>'}`;
+}
+const oldGoV3=go;
+go=function(p){oldGoV3(p);if(p==='Practice'){el.insertAdjacentHTML('afterbegin',`<div class="card"><h2>🖥️ Realistic form simulator</h2><p>Create incidents, support users and REDD+ parcels. Review saved practice records.</p><button onclick="simHome()">Open admin workspace →</button></div>`) }};
+
 </script></body></html>
